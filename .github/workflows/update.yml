@@ -1,5 +1,10 @@
 name: Update 112 meldingen
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/**'
+      - '.github/workflows/update.yml'
   schedule:
     - cron: '*/15 * * * *'
   workflow_dispatch:
