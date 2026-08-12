@@ -5,9 +5,16 @@ from email.utils import parsedate_to_datetime
 from zoneinfo import ZoneInfo
 
 BASE='https://112-nu.nl/'
-TARGETS=['Pijnacker','Nootdorp','Delfgauw','Berkel en Rodenrijs']
-ALIASES={'Pijnacker':['pijnacker'],'Nootdorp':['nootdorp'],'Delfgauw':['delfgauw'],'Berkel en Rodenrijs':['berkel en rodenrijs','berkel-rodenrijs']}
-UA={'User-Agent':'112-pijnacker-dashboard/1.0 (+https://github.com/stefanheijkoop-code/112-pijnacker)'}
+TARGETS=['Pijnacker','Nootdorp','Delfgauw','Berkel en Rodenrijs','Oude Leede','Delft']
+ALIASES={
+ 'Pijnacker':['pijnacker'],
+ 'Nootdorp':['nootdorp'],
+ 'Delfgauw':['delfgauw'],
+ 'Berkel en Rodenrijs':['berkel en rodenrijs','berkel-rodenrijs','berkel rodenrijs'],
+ 'Oude Leede':['oude leede','oude-leede'],
+ 'Delft':['delft']
+}
+UA={'User-Agent':'112-pijnacker-dashboard/1.1 (+https://github.com/stefanheijkoop-code/112-pijnacker)'}
 
 class Links(HTMLParser):
  def __init__(self): super().__init__(); self.href=None; self.text=''; self.links=[]
@@ -24,16 +31,13 @@ def get(url):
  with urllib.request.urlopen(req,timeout=25) as r:return r.read()
 
 def discover():
- p=Links();p.feed(get(BASE+'rss.html').decode('utf-8','ignore'))
- wanted={}
- for text,href in p.links:
-  low=text.lower()
-  if 'rss' in href.lower() or 'feed' in href.lower() or 'actuele meldingen' in low:
-   if 'brandweer' in low: wanted['Brandweer']=urllib.parse.urljoin(BASE,href)
-   elif 'politie' in low: wanted['Politie']=urllib.parse.urljoin(BASE,href)
-   elif 'ambulance' in low: wanted['Ambulance']=urllib.parse.urljoin(BASE,href)
-   elif 'traumahelikopter' in low: wanted['Traumahelikopter']=urllib.parse.urljoin(BASE,href)
- return wanted
+ # Stable public P2000 RSS endpoints documented by 112-nu.nl
+ return {
+  'Brandweer': BASE+'brandweer/rss',
+  'Politie': BASE+'politie/rss',
+  'Ambulance': BASE+'ambulance/rss',
+  'Traumahelikopter': BASE+'trauma-helikopter/rss'
+ }
 
 def txt(el,name):
  x=el.find(name); return html.unescape(' '.join((x.text or '').split())) if x is not None else ''
@@ -53,7 +57,7 @@ def main():
   try: root=ET.fromstring(get(url))
   except Exception as e: print(service,e);continue
   items=root.findall('.//item')
-  for it in items[:150]:
+  for it in items[:250]:
    title=clean(txt(it,'title')); desc=clean(txt(it,'description')); link=txt(it,'link'); pub=txt(it,'pubDate'); blob=' '.join([title,desc,link])
    place=place_for(blob)
    if not place: continue
@@ -66,14 +70,14 @@ def main():
     dt=dt.astimezone(ZoneInfo('Europe/Amsterdam'))
    except: dt=now
    priority=''
-   m=re.search(r'\b(PRIO\s*[123]|P[123]|A[12])\b',blob,re.I)
-   if m:priority=m.group(1).upper().replace(' ','')
+   m=re.search(r'\b(PRIO\s*[123]|P\s*[123]|A\s*[12])\b',blob,re.I)
+   if m:priority=re.sub(r'\s+','',m.group(1).upper())
    loc=''
-   for candidate in [title,desc]:
+   for candidate in [desc,title]:
     if place.lower() in candidate.lower(): loc=candidate[:180];break
-   incidents.append({'service':service,'place':place,'title':title or desc[:160],'location':loc or place,'original':desc,'priority':priority,'unit':'','published':dt.isoformat(),'time_label':dt.strftime('%a %d-%m · %H:%M'),'is_today':dt.date()==now.date(),'lat':None,'lon':None,'link':link})
+   incidents.append({'service':service,'place':place,'title':title or desc[:160],'location':loc or place,'original':desc,'priority':priority,'unit':'','published':dt.isoformat(),'time_label':dt.strftime('%d-%m · %H:%M'),'is_today':dt.date()==now.date(),'lat':None,'lon':None,'link':link})
  incidents.sort(key=lambda x:x['published'],reverse=True)
- out={'updated':now.isoformat(),'updated_label':now.strftime('%H:%M'),'feeds':feeds,'incidents':incidents[:300]}
+ out={'updated':now.isoformat(),'updated_label':now.strftime('%H:%M'),'feeds':feeds,'incidents':incidents[:500]}
  with open('data.json','w',encoding='utf8') as f:json.dump(out,f,ensure_ascii=False,separators=(',',':'))
  print('feeds',feeds,'incidents',len(incidents))
 if __name__=='__main__':main()
