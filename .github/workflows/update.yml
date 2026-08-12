@@ -23,6 +23,8 @@ jobs:
           python-version: '3.12'
       - name: Fetch P2000 feeds and geocode new streets
         run: python scripts/update.py
+      - name: Normalize services and timestamps
+        run: python scripts/fixup.py
       - name: Save fresh data
         run: |
           git config user.name "112 Pijnacker Bot"
