@@ -1,15 +1,15 @@
 name: Update 112 meldingen
 on:
   push:
-    branches: [main]
+    branches: [main, test-live-refresh]
     paths:
       - 'scripts/**'
       - '.github/workflows/update.yml'
   schedule:
-    - cron: '*/15 * * * *'
+    - cron: '*/5 * * * *'
   workflow_dispatch:
 concurrency:
-  group: update-112-data
+  group: update-112-data-${{ github.ref }}
   cancel-in-progress: true
 permissions:
   contents: write
@@ -21,10 +21,27 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Fetch P2000 feeds and geocode new streets
+      - name: Disable slow geocoding in live path
+        run: sed -i 's/MAX_NEW_GEOCODES=3/MAX_NEW_GEOCODES=0/' scripts/update.py
+      - name: Fetch latest P2000 feeds
         run: python scripts/update.py
       - name: Normalize services and timestamps
         run: python scripts/fixup.py
+      - name: Validate data
+        run: |
+          python - <<'PY'
+          import json, sys
+          from datetime import datetime
+          with open('data.json', encoding='utf-8') as f:
+              d=json.load(f)
+          inc=d.get('incidents',[])
+          assert len(inc)>0, 'No incidents found'
+          assert d.get('updated'), 'Missing updated timestamp'
+          allowed={'Pijnacker','Nootdorp','Delfgauw','Berkel en Rodenrijs','Oude Leede','Delft'}
+          assert all(x.get('place') in allowed for x in inc), 'Unexpected place in data'
+          assert all(x.get('service') in {'Brandweer','Ambulance','Politie','Traumahelikopter'} for x in inc), 'Unexpected service in data'
+          print('validated incidents:', len(inc), 'updated:', d['updated'])
+          PY
       - name: Save fresh data
         run: |
           git config user.name "112 Pijnacker Bot"
