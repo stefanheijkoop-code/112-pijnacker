@@ -30,8 +30,7 @@ jobs:
       - name: Validate data
         run: |
           python - <<'PY'
-          import json, sys
-          from datetime import datetime
+          import json
           with open('data.json', encoding='utf-8') as f:
               d=json.load(f)
           inc=d.get('incidents',[])
@@ -40,6 +39,11 @@ jobs:
           allowed={'Pijnacker','Nootdorp','Delfgauw','Berkel en Rodenrijs','Oude Leede','Delft'}
           assert all(x.get('place') in allowed for x in inc), 'Unexpected place in data'
           assert all(x.get('service') in {'Brandweer','Ambulance','Politie','Traumahelikopter'} for x in inc), 'Unexpected service in data'
+          keys=[]
+          for x in inc:
+              loc=' '.join((x.get('location') or x.get('title','')).lower().split())
+              keys.append((x.get('service'),x.get('place'),x.get('published','')[:16],loc))
+          assert len(keys)==len(set(keys)), 'Duplicate normalized incident rows remain'
           print('validated incidents:', len(inc), 'updated:', d['updated'])
           PY
       - name: Save fresh data
