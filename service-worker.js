@@ -1,5 +1,5 @@
 /* Increment SHELL_VERSION whenever app files change. Data survives shell updates. */
-const SHELL_VERSION = '112-pijnacker-shell-v1';
+const SHELL_VERSION = '112-pijnacker-shell-v2';
 const DATA_CACHE = '112-pijnacker-data-v1';
 const base = self.registration.scope;
 const url = path => new URL(path, base).href;
@@ -28,13 +28,13 @@ function tagged(response, source) {
   headers.set('X-112-Data-Source', source);
   return new Response(response.body, {status: response.status, statusText: response.statusText, headers});
 }
-async function loadData() {
+async function loadData(networkUrl = DATA_URL) {
   let cache, saved;
   try { cache = await caches.open(DATA_CACHE); saved = await cache.match(DATA_URL); } catch (_) {}
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 8000);
   try {
-    const response = await fetch(DATA_URL, {cache: 'no-store', signal: controller.signal});
+    const response = await fetch(networkUrl, {cache: 'no-store', signal: controller.signal});
     if (!response.ok) throw new Error('HTTP ' + response.status);
     const data = await response.clone().json();
     if (!valid(data)) throw new Error('Invalid data');
@@ -57,7 +57,7 @@ self.addEventListener('fetch', event => {
   const request = event.request, target = new URL(request.url);
   if (request.method !== 'GET' || target.origin !== new URL(base).origin) return;
   if (target.pathname === new URL(DATA_URL).pathname) {
-    event.respondWith(loadData()); return;
+    event.respondWith(loadData(request.url)); return;
   }
   if (request.mode === 'navigate' && target.href.startsWith(base)) {
     event.respondWith((async () => (await caches.open(SHELL_VERSION)).match(url('index.html')).then(saved => saved || fetch(request)))());
@@ -66,4 +66,14 @@ self.addEventListener('fetch', event => {
   if (FILES.includes(target.href)) {
     event.respondWith((async () => (await caches.open(SHELL_VERSION)).match(request).then(saved => saved || fetch(request)))());
   }
+});
+
+self.addEventListener('message', event => {
+  const message=event.data;
+  if(message?.type!=='STORE_LIVE_DATA'||!valid(message.data))return;
+  event.waitUntil((async()=>{
+    const cache=await caches.open(DATA_CACHE),saved=await cache.match(DATA_URL);
+    if(saved&&Date.parse((await saved.json()).updated)>Date.parse(message.data.updated))return;
+    await cache.put(DATA_URL,new Response(JSON.stringify(message.data),{headers:{'Content-Type':'application/json'}}));
+  })().catch(()=>{}));
 });

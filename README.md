@@ -39,3 +39,23 @@ Een fout in de kaart blokkeert de meldingenlijst niet. Bij nood: bel altijd 112.
 Voer `node --test tests/offline.cjs` uit (Node 18+, zonder extra dependencies).
 Dit controleert cache/fallback, datavalidatie, opslagfouten, lokale assets en JavaScript-syntaxis.
 De browser- en Safari/iPhone-tests hierboven blijven aanvullend nodig.
+
+## Handmatig alles verversen
+
+De verversknop haalt live P2000-feeds op via het read-only endpoint
+`https://112-pijnacker-live-stefan-heijkoop-2530s-projects.vercel.app/api/refresh`.
+Dit omzeilt de vertraagde GitHub Actions-planning voor handmatig verversen.
+Het endpoint staat in `api/refresh.py`, gebruikt uitsluitend vaste openbare feeds,
+heeft geen GitHub-sleutels en schrijft geen bestanden. Vercel host dit endpoint;
+GitHub Pages blijft de app hosten. De productiealias is openbaar, previews en
+individuele deployment-URLs blijven beschermd. CORS staat het GitHub Pages-origin toe.
+
+Na verversen worden lijst, tellers en kaartmarkers opnieuw opgebouwd en wordt de
+kaartachtergrond herladen. De app toont wanneer de bronnen zijn gecontroleerd en
+of een deel van de bronnen ontbreekt. Bij fouten blijven opgeslagen meldingen
+beschikbaar. Live data wordt door de service worker opgeslagen voor offline gebruik.
+Automatisch verversen blijft het gepubliceerde databestand controleren.
+
+Deploy wijzigingen aan `api/refresh.py` en `scripts/update.py` ook naar Vercel.
+Voer `node --test tests/*.cjs` en
+`python -m unittest discover -s tests -p 'test_*.py'` uit.

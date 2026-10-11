@@ -25,7 +25,7 @@ def xtext(el,name):
 def place_for(s):
  low=(s or '').lower()
  for p in ['Berkel en Rodenrijs','Oude Leede','Delfgauw','Nootdorp','Pijnacker','Delft']:
-  if any(a in low for a in ALIASES[p]):return p
+  if any(re.search(r'(?<![a-z])'+re.escape(a)+r'(?![a-z])',low) for a in ALIASES[p]):return p
  return None
 
 def service_for(s,default='Overig'):
@@ -64,8 +64,8 @@ def street_for(text,place,link=''):
   if words:return ' '.join(words[-5:])[:80]
  return ''
 
-def parse_feed(url,now,default='Overig',source='Alarmeringen.nl'):
- try:root=ET.fromstring(get(url))
+def parse_feed(url,now,default='Overig',source='Alarmeringen.nl',payload=None):
+ try:root=ET.fromstring(get(url) if payload is None else payload)
  except Exception as e:print('feed failed',url,type(e).__name__,e);return []
  out=[]
  for it in root.findall('.//item')[:120]:
