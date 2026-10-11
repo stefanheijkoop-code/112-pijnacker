@@ -1,5 +1,5 @@
 /* Increment SHELL_VERSION whenever app files change. Data survives shell updates. */
-const SHELL_VERSION = '112-pijnacker-shell-v2';
+const SHELL_VERSION = '112-pijnacker-shell-v3';
 const DATA_CACHE = '112-pijnacker-data-v1';
 const base = self.registration.scope;
 const url = path => new URL(path, base).href;
@@ -75,5 +75,6 @@ self.addEventListener('message', event => {
     const cache=await caches.open(DATA_CACHE),saved=await cache.match(DATA_URL);
     if(saved&&Date.parse((await saved.json()).updated)>Date.parse(message.data.updated))return;
     await cache.put(DATA_URL,new Response(JSON.stringify(message.data),{headers:{'Content-Type':'application/json'}}));
+    event.source?.postMessage({type:'LIVE_DATA_STORED'});
   })().catch(()=>{}));
 });
