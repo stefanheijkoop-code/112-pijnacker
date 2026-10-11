@@ -9,11 +9,22 @@ function harness(failLive=false){
  const btn={classList:{add(){},remove(){}},setAttribute(){}};
  const ctx={console,URL,Date,AbortController,setTimeout,clearTimeout,updated:{textContent:''},offlineReady:{textContent:''},navigator:{onLine:true,serviceWorker:{controller:{postMessage:m=>messages.push(m)},getRegistration:async()=>({update:async()=>{}})}},document:{getElementById:()=>btn},fetch:async url=>{calls.push(url);if(failLive&&url.includes('/api/refresh'))throw Error('offline');return new Response(JSON.stringify({updated:url.includes('/api/refresh')?'2026-10-11T22:00:00+02:00':'2026-10-11T18:13:00+02:00',incidents:[{title:'Nieuwe melding',service:'Ambulance'}],partial:false}));}};
  vm.createContext(ctx);vm.runInContext(code,ctx);vm.runInContext('render=()=>{};tiles={redraw:()=>onRedraw()}',Object.assign(ctx,{onRedraw:()=>redraws++}));
- return {ctx,calls,messages,get redraws(){return redraws},run:()=>vm.runInContext('load(true)',ctx)};
+ return {ctx,calls,messages,get redraws(){return redraws},run:(manual=true)=>vm.runInContext('load('+manual+')',ctx)};
 }
 test('manual refresh fetches live sources, stores result and redraws map',async()=>{
  const h=harness();await h.run();assert.equal(h.calls.length,1);assert(h.calls[0].includes('/api/refresh?t='));assert.equal(h.messages[0].type,'STORE_LIVE_DATA');assert.equal(h.redraws,1);assert(h.ctx.updated.textContent.includes('Bronnen gecontroleerd'));
 });
 test('live failure reloads saved JSON and explicitly reports failed source refresh',async()=>{
  const h=harness(true);await h.run();assert.equal(h.calls.length,2);assert(h.calls[1].startsWith('./data.json?t='));assert.equal(h.messages.length,0);assert(h.ctx.updated.textContent.includes('Nieuwe bronmeldingen ophalen mislukt'));
+});
+
+test('automatic refresh also fetches live sources without a button click',async()=>{
+ const h=harness();await h.run(false);assert.equal(h.calls.length,1);assert(h.calls[0].includes('/api/refresh?t='));assert.equal(h.messages[0].type,'STORE_LIVE_DATA');assert.equal(h.redraws,0);
+});
+test('automatic refresh repeats live requests, rather than fetching old data.json',async()=>{
+ const h=harness();await h.run(false);await h.run(false);assert.equal(h.calls.length,2);assert(h.calls.every(url=>url.includes('/api/refresh?t=')));
+});
+test('opening, visible polling, reconnect and returning to app all invoke live load',()=>{
+ assert(html.includes('load();setInterval('));assert(html.includes('if(document.hidden)return'));assert(html.includes('},30000)'));
+ assert(html.includes("window.addEventListener('online',()=>{load()"));assert(html.includes("if(!document.hidden)load()"));
 });

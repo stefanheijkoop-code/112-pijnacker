@@ -1,5 +1,5 @@
 /* Increment SHELL_VERSION whenever app files change. Data survives shell updates. */
-const SHELL_VERSION = '112-pijnacker-shell-v4';
+const SHELL_VERSION = '112-pijnacker-shell-v5';
 const DATA_CACHE = '112-pijnacker-data-v1';
 const base = self.registration.scope;
 const url = path => new URL(path, base).href;
@@ -12,12 +12,19 @@ self.addEventListener('install', event => event.waitUntil((async () => {
   const cache = await caches.open(SHELL_VERSION);
   try { await cache.addAll(FILES.map(path => new Request(path, {cache: 'reload'}))); }
   catch (error) { await caches.delete(SHELL_VERSION); throw error; }
+  await self.skipWaiting();
 })()));
 self.addEventListener('activate', event => event.waitUntil((async () => {
+  const previousShells=(await caches.keys()).filter(name=>name.startsWith('112-pijnacker-shell-')&&name!==SHELL_VERSION);
   for (const name of await caches.keys()) {
     if (name.startsWith('112-pijnacker-shell-') && name !== SHELL_VERSION) await caches.delete(name);
   }
   await self.clients.claim();
+  // Replace old app code once, so existing v4 clients also use automatic live fetching.
+  if(previousShells.length){
+    const clients=await self.clients.matchAll({type:'window'});
+    await Promise.allSettled(clients.filter(client=>client.url.startsWith(base)).map(client=>client.navigate(client.url)));
+  }
 })()));
 function valid(data) {
   return data && Array.isArray(data.incidents) && Number.isFinite(Date.parse(data.updated)) &&

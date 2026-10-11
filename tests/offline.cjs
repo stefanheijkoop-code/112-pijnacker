@@ -8,7 +8,7 @@ const root=path.join(__dirname,'..');
 function harness(){
  const stores=new Map(),handlers={},requests=[];let response,writeFails=false;
  const cache=()=>({match:async key=>stores.get(key)?.clone(),put:async(key,r)=>{if(writeFails)throw Error('quota');stores.set(key,r.clone())},addAll:async files=>{for(const f of files){requests.push(f.url);stores.set(f.url,new Response('shell'));}}});
- const ctx={self:{registration:{scope:'https://example.test/112-pijnacker/'},clients:{claim:async()=>{}},addEventListener:(name,fn)=>handlers[name]=fn},caches:{open:async()=>cache(),keys:async()=>['unrelated','112-pijnacker-data-v1'],delete:async()=>{}},URL,Request,Response,Headers,AbortController,setTimeout:fn=>{ctx.abort=fn;return 1},clearTimeout:()=>{},fetch:async()=>{if(response instanceof Error)throw response;return response.clone()}};
+ const ctx={self:{registration:{scope:'https://example.test/112-pijnacker/'},skipWaiting:async()=>{},clients:{claim:async()=>{}},addEventListener:(name,fn)=>handlers[name]=fn},caches:{open:async()=>cache(),keys:async()=>['unrelated','112-pijnacker-data-v1'],delete:async()=>{}},URL,Request,Response,Headers,AbortController,setTimeout:fn=>{ctx.abort=fn;return 1},clearTimeout:()=>{},fetch:async()=>{if(response instanceof Error)throw response;return response.clone()}};
  vm.createContext(ctx);vm.runInContext(fs.readFileSync(path.join(root,'service-worker.js'),'utf8'),ctx);
  return {ctx,stores,requests,handlers,setResponse:r=>response=r,failWrites:()=>writeFails=true,run:()=>vm.runInContext('loadData()',ctx)};
 }
@@ -32,4 +32,16 @@ test('no saved dataset yields 503; quota failure preserves valid online response
 });
 test('inline scripts parse and no CDN runtime dependency remains',()=>{
  const html=fs.readFileSync(path.join(root,'index.html'),'utf8');for(const match of html.matchAll(/<script>([\s\S]*?)<\/script>/g))new vm.Script(match[1]);assert(!html.includes('unpkg.com'));assert(html.includes('if(!markers)return'));assert(html.includes('aria-live="polite"'));
+});
+test('new shell activates immediately and upgrades only existing dashboard windows',async()=>{
+ const h=harness();let skipped=false,activation;const navigated=[];
+ h.ctx.self.skipWaiting=async()=>{skipped=true};
+ let install;h.handlers.install({waitUntil:p=>install=p});await install;assert.equal(skipped,true);
+ h.ctx.caches.keys=async()=>['112-pijnacker-shell-v4','112-pijnacker-data-v1'];
+ h.ctx.self.clients.matchAll=async()=>[
+  {url:'https://example.test/112-pijnacker/',navigate:async url=>navigated.push(url)},
+  {url:'https://example.test/unrelated/',navigate:async url=>navigated.push(url)}
+ ];
+ h.handlers.activate({waitUntil:p=>activation=p});await activation;
+ assert.deepEqual(navigated,['https://example.test/112-pijnacker/']);
 });

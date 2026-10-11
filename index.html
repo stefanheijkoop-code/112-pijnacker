@@ -7,34 +7,47 @@ function showStatus(){
   announce(!navigator.onLine?'Offline — opgeslagen meldingen van '+stamp()+'. Nieuwe meldingen worden niet opgehaald.':refreshError?refreshError+' — opgeslagen meldingen van '+stamp()+'.':(lastSource==='live'||lastSource==='live-cache')?'Bronnen gecontroleerd om '+lastChecked+(livePartial?' — enkele bronnen onbereikbaar.':' — meldingen, tellers en kaart bijgewerkt.'):lastSource==='cache'?'Verversen mislukt — opgeslagen meldingen van '+stamp()+' worden getoond.':'Verbinding beschikbaar — brondata bijgewerkt op '+stamp()+'.');
 }
 function readiness(){offlineReady.textContent=stored&&navigator.serviceWorker?.controller?'Offline beschikbaar — app en meldingen opgeslagen.':'Offline beschikbaarheid nog niet bevestigd.';}
+async function fetchDataset(url,timeout){
+ const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeout);
+ try{
+  const response=await fetch(url+'?t='+Date.now(),{cache:'no-store',signal:controller.signal});
+  if(!response.ok)throw Error('HTTP '+response.status);
+  const json=await response.json();
+  if(!Array.isArray(json.incidents)||!Number.isFinite(Date.parse(json.updated))||!json.incidents.every(x=>x&&typeof x.title==='string'&&typeof x.service==='string'))throw Error('Ongeldige meldingen');
+  return {response,json};
+ }finally{clearTimeout(timer);}
+}
 async function load(manual=false){
  if(loading){if(manual)pendingRefresh=true;return;}loading=true;refreshError='';
  const btn=document.getElementById('refreshBtn');btn.disabled=true;btn.classList.add('loading');btn.setAttribute('aria-busy','true');
- if(manual){announce('Nieuwe bronmeldingen ophalen…');if(tiles)tiles.redraw();navigator.serviceWorker?.getRegistration().then(reg=>reg?.update()).catch(console.error);}
- const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),manual?25000:10000);
+ if(manual||!hasData)announce('Nieuwe bronmeldingen ophalen…');
+ if(manual){if(tiles)tiles.redraw();navigator.serviceWorker?.getRegistration().then(reg=>reg?.update()).catch(console.error);}
  try{
-  let r,live=false;
-  if(manual&&navigator.onLine){
-   try{r=await fetch(LIVE+'?t='+Date.now(),{cache:'no-store',signal:controller.signal});if(!r.ok)throw Error('HTTP '+r.status);live=true;}
-   catch(e){refreshError='Nieuwe bronmeldingen ophalen mislukt';r=await fetch(DATA+'?t='+Date.now(),{cache:'no-store',signal:controller.signal});}
-  }else r=await fetch(DATA+'?t='+Date.now(),{cache:'no-store',signal:controller.signal});
-  if(!r.ok)throw Error('HTTP '+r.status);
-  const j=await r.json();
-  if(!Array.isArray(j.incidents)||!Number.isFinite(Date.parse(j.updated))||!j.incidents.every(x=>x&&typeof x.title==='string'&&typeof x.service==='string'))throw Error('Ongeldige meldingen');
-  if(!lastUpdated||Date.parse(j.updated)>=Date.parse(lastUpdated)){data=j.incidents;lastUpdated=j.updated;lastCount=data.length;}
-  hasData=true;lastSource=live?'live':j.checked_sources?'live-cache':r.headers.get('X-112-Data-Source')||'network';livePartial=!!j.partial;lastChecked=(j.checked_sources?new Date(j.updated):new Date()).toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit',timeZone:'Europe/Amsterdam'});
-  if(live)navigator.serviceWorker?.controller?.postMessage({type:'STORE_LIVE_DATA',data:j});
-  stored=lastSource==='cache'||r.headers.get('X-112-Data-Stored')==='yes';
+  let result,live=false;
+  if(navigator.onLine){
+   try{result=await fetchDataset(LIVE,20000);live=true;}
+   catch(e){console.error(e);refreshError='Nieuwe bronmeldingen ophalen mislukt';result=await fetchDataset(DATA,10000);}
+  }else result=await fetchDataset(DATA,10000);
+  const {response:r,json:j}=result;
+  const accepted=!lastUpdated||Date.parse(j.updated)>=Date.parse(lastUpdated);
+  if(accepted){
+   data=j.incidents;lastUpdated=j.updated;lastCount=data.length;
+   lastSource=live?'live':j.checked_sources?'live-cache':r.headers.get('X-112-Data-Source')||'network';
+   livePartial=!!j.partial;lastChecked=new Date(j.updated).toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit',second:'2-digit',timeZone:'Europe/Amsterdam'});
+  }
+  hasData=true;
+  if(live&&accepted)navigator.serviceWorker?.controller?.postMessage({type:'STORE_LIVE_DATA',data:j});
+  stored=stored||lastSource==='cache'||r.headers.get('X-112-Data-Stored')==='yes';
   render();showStatus();readiness();
  }catch(e){
   console.error(e);
-  if(hasData){lastSource='cache';render();showStatus();}
+  if(hasData){refreshError='Nieuwe bronmeldingen ophalen mislukt';render();showStatus();}
   else{announce('Meldingen konden niet worden geladen. Er zijn nog geen opgeslagen meldingen beschikbaar.');list.innerHTML='<div class="empty">Geen opgeslagen meldingen beschikbaar. Probeer opnieuw zodra er verbinding is.</div>';stats.innerHTML='';count.textContent='';}
- }finally{clearTimeout(timer);loading=false;btn.disabled=false;btn.classList.remove('loading');btn.setAttribute('aria-busy','false');if(pendingRefresh){pendingRefresh=false;load(true);}}
+ }finally{loading=false;btn.disabled=false;btn.classList.remove('loading');btn.setAttribute('aria-busy','false');if(pendingRefresh){pendingRefresh=false;load(true);}}
 }
 chips();
 try{if(!window.L)throw Error('Leaflet ontbreekt');initMap();}catch(e){console.error(e);mapStatus.textContent='Kaart niet beschikbaar. De meldingenlijst blijft bruikbaar.';}
-load();setInterval(()=>{if(navigator.onLine)load();else if(hasData){render();showStatus();}},60000);
+load();setInterval(()=>{if(document.hidden)return;if(navigator.onLine)load();else if(hasData){render();showStatus();}},30000);
 window.addEventListener('offline',()=>{showStatus();mapStatus.textContent='Offline — de kaartachtergrond is mogelijk niet beschikbaar. De meldingenlijst blijft bruikbaar.';});
 window.addEventListener('online',()=>{load();if(tiles)tiles.redraw();});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)load();});

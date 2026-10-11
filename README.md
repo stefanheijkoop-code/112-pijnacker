@@ -14,7 +14,7 @@ Een fout in de kaart blokkeert de meldingenlijst niet. Bij nood: bel altijd 112.
 ## Onderhoud
 
 - Verhoog `SHELL_VERSION` in `service-worker.js` bij wijzigingen aan index, manifest of vendor-assets.
-- Shell-updates wachten totdat oude tabbladen gesloten zijn; geen geforceerde workerwissel.
+- Shell-updates activeren na het opslaan van alle appbestanden. Een oudere geopende app wordt eenmalig herladen om de nieuwe versie te gebruiken.
 - De laatste geldige dataset staat apart in `112-pijnacker-data-v1` en blijft behouden bij shell-updates.
 - Data gebruikt netwerk-eerst, een timeout van 8 seconden en fallback bij netwerk-, HTTP- of JSON-fouten.
 - Een oudere dataset vervangt geen nieuwere dataset. Een geldige lege lijst is wel toegestaan.
@@ -54,7 +54,7 @@ Na verversen worden lijst, tellers en kaartmarkers opnieuw opgebouwd en wordt de
 kaartachtergrond herladen. De app toont wanneer de bronnen zijn gecontroleerd en
 of een deel van de bronnen ontbreekt. Bij fouten blijven opgeslagen meldingen
 beschikbaar. Live data wordt door de service worker opgeslagen voor offline gebruik.
-Automatisch verversen blijft het gepubliceerde databestand controleren.
+Bij openen, herstel van de verbinding en terugkeer naar de app worden direct live bronnen opgehaald. Terwijl het dashboard zichtbaar is, worden de bronnen elke 30 seconden gecontroleerd. Het gepubliceerde databestand is uitsluitend een fallback. Feedproviders kunnen zelf enige vertraging hebben; dit is geen gegarandeerde realtime alarmdienst.
 
 Deploy wijzigingen aan `api/refresh.py` en `scripts/update.py` ook naar Vercel.
 Voer `node --test tests/*.cjs` en
