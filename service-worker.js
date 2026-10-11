@@ -1,5 +1,5 @@
 /* Increment SHELL_VERSION whenever app files change. Data survives shell updates. */
-const SHELL_VERSION = '112-pijnacker-shell-v3';
+const SHELL_VERSION = '112-pijnacker-shell-v4';
 const DATA_CACHE = '112-pijnacker-data-v1';
 const base = self.registration.scope;
 const url = path => new URL(path, base).href;

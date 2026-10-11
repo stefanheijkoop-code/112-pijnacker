@@ -4,7 +4,7 @@ function stamp(){return lastUpdated?new Date(lastUpdated).toLocaleString('nl-NL'
 function announce(text){if(updated.textContent!==text)updated.textContent=text;}
 function showStatus(){
   if(!hasData)return;
-  announce(!navigator.onLine?'Offline — opgeslagen meldingen van '+stamp()+'. Nieuwe meldingen worden niet opgehaald.':refreshError?refreshError+' — opgeslagen meldingen van '+stamp()+'.':lastSource==='live'?'Bronnen gecontroleerd om '+lastChecked+(livePartial?' — enkele bronnen onbereikbaar.':' — meldingen, tellers en kaart bijgewerkt.'):lastSource==='cache'?'Verversen mislukt — opgeslagen meldingen van '+stamp()+' worden getoond.':'Verbinding beschikbaar — brondata bijgewerkt op '+stamp()+'.');
+  announce(!navigator.onLine?'Offline — opgeslagen meldingen van '+stamp()+'. Nieuwe meldingen worden niet opgehaald.':refreshError?refreshError+' — opgeslagen meldingen van '+stamp()+'.':(lastSource==='live'||lastSource==='live-cache')?'Bronnen gecontroleerd om '+lastChecked+(livePartial?' — enkele bronnen onbereikbaar.':' — meldingen, tellers en kaart bijgewerkt.'):lastSource==='cache'?'Verversen mislukt — opgeslagen meldingen van '+stamp()+' worden getoond.':'Verbinding beschikbaar — brondata bijgewerkt op '+stamp()+'.');
 }
 function readiness(){offlineReady.textContent=stored&&navigator.serviceWorker?.controller?'Offline beschikbaar — app en meldingen opgeslagen.':'Offline beschikbaarheid nog niet bevestigd.';}
 async function load(manual=false){
@@ -22,7 +22,7 @@ async function load(manual=false){
   const j=await r.json();
   if(!Array.isArray(j.incidents)||!Number.isFinite(Date.parse(j.updated))||!j.incidents.every(x=>x&&typeof x.title==='string'&&typeof x.service==='string'))throw Error('Ongeldige meldingen');
   if(!lastUpdated||Date.parse(j.updated)>=Date.parse(lastUpdated)){data=j.incidents;lastUpdated=j.updated;lastCount=data.length;}
-  hasData=true;lastSource=live?'live':r.headers.get('X-112-Data-Source')||'network';livePartial=live&&j.partial;lastChecked=new Date().toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit',timeZone:'Europe/Amsterdam'});
+  hasData=true;lastSource=live?'live':j.checked_sources?'live-cache':r.headers.get('X-112-Data-Source')||'network';livePartial=!!j.partial;lastChecked=(j.checked_sources?new Date(j.updated):new Date()).toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit',timeZone:'Europe/Amsterdam'});
   if(live)navigator.serviceWorker?.controller?.postMessage({type:'STORE_LIVE_DATA',data:j});
   stored=lastSource==='cache'||r.headers.get('X-112-Data-Stored')==='yes';
   render();showStatus();readiness();
